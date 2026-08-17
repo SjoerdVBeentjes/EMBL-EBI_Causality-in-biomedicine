@@ -1,0 +1,761 @@
+---
+title: 'EBI Causality in biomedicine: Day 1 - Fundamental Problem of Causal Inference'
+author: "Sjoerd Beentjes and Ava Khamseh"
+date: "2026-10-5"
+output: beamer_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## Load auxiliary scripts with code
+
+```{r}
+## Source auxiliary scripts: Utilities, data-generation processes (dgp), estimators
+source("./scripts/utils.R")
+source("./scripts/dgp.R")
+source("./scripts/estimators.R")
+```
+
+## Load the required packages for these simulations
+
+```{r, echo = TRUE, message = FALSE, warnings = FALSE, results = 'hide'}
+# Data manipulation 
+library(tidyverse)
+library(MASS)
+library(survey)
+library(boot)
+
+# Plotting and visualisation
+library(ggplot2)
+library(skimr)
+
+# Learning algorithms
+library(glm2)
+library(glmnet)
+library(randomForest)
+library(SuperLearner)
+```
+
+# Simulation study 1 (slide 24)
+
+### Data structure $O = (W_1, W_2, A, Y)$
+
+The data is generated from the following data-generation process:
+
+$$
+W = (W_1, W_2) \sim \mathcal{N}\left( \begin{pmatrix} 0 \\ 1 \end{pmatrix}, \begin{pmatrix} 1 & 0.5 \\ 0.5 & 1 \end{pmatrix} \right) \\
+A \sim \mathcal{B}(g(W)) \, \text{ where } g(W) = \frac{1}{1+e^{-0.5 + 1.5W_1 - 0.5W_2}} \\
+Y \sim \mathcal{N}\Bigl(1 + A - 0.7W_1 + 0.3 e^{-W_1W_2}, 1\Bigr)
+$$
+
+Note that the true propensity score $e(W) \equiv P(A=1|W)$ is a main-terms logistic regression, and the outcome $Y$ is normally distributed with a mean that depends linearly on treatment $A$, but non-linearly on the covariates $(W_1,W_2)$.
+
+```{r, Generate data}
+# Generate data using sim1a() function from "./scripts/dgp.R" + examine data
+n_sample <- 2000
+data_a <- sim1a(n = n_sample)
+
+# Extract data summary with skimr: Missingness (none here), mean, sd, quantiles, histogram
+skim(data_a)
+
+# The true Average Treatment Effect (ATE) is equal to 1
+true_value <- 1
+```
+
+We specify the linear model $Y \sim A + W_1 + W_2$, i.e., we make the assumption that outcome $Y$ is a linear function of treatment $A$ and covariates $W_1, W_2$. If this is not true, the model is said to be misspecified.
+
+```{r, Model specification}
+# Extract the covariates
+# For Q, define a baseline linear model Y ~ A + W1 + W2
+covariates <- colnames(data)[grepl("^W", colnames(data))]
+Q_lin <- as.formula(paste("Y ~ A +", paste(covariates, collapse = " + ")))
+
+# Check the formula is as expected
+print(Q_lin)
+```
+
+### Obtain the estimate by extracting the coefficient (slide 24)
+
+We fit the linear model to data using Ordinary Least Squares (OLS), extract the coefficient in front of $A$, together with its $95\%$ confidence interval (CI) and corresponding p-value. Crucially, these are computed by using the linear model assumption: If the linear model is misspecified, the CI and p-value are not reliable.
+
+```{r}
+# Use Outcome Regression (OR, or OLS) with Q_lin. First, we define the OLS function
+OLS_lin = function(data){ estimate_OLS(data, alpha = 0.05, true_value, Qform = Q_lin)}
+
+# Generate data k = 1 times, and tabulate the results (MC_est() from "./scripts/utils.R")
+n_sample <- 2000
+MC_est(k=1, n=n_sample, simulation=sim1a, est_list=list(OLS_lin = OLS_lin))
+```
+
+```{r}
+# Repeat the above k = 200 times + save the resulting dataframe
+sim1_200 <- MC_est(k=200, n=n_sample, simulation=sim1a, est_list=list(OLS_lin = OLS_lin))
+```
+
+```{r}
+# Inspect the table of 200 estimates
+head(sim1_200)
+
+# Plot the histogram with hist_per_est() from "./scripts/utils.R" (xlimits is optional)
+# Note that this step disregards OLS's CI estimate and p-value
+sim1_200 %>% hist_per_est(xlimits = c(0, 1.2))
+
+# Compute summary statistics with MC_res() from "./scripts/utils.R"
+sim1_200 %>% MC_res()
+```
+
+Although coverage is reasonable $\approx 81.5\%$ at this sample size $n = 2000$, the histogram is clearly not centred at the true value of one. It is instructive to examine what happens to the coverage when sample size increases (e.g., set $n_{\text{sample}} = 20000$).
+
+### Work model-independently: Use a substitution estimator (slides 25-30)
+
+The Average Treatment Effect is defined model-independently via the equation
+
+$$
+\psi_s = \mathbb{E}_W \bigl[\mathbb{E}(Y | W,A=1) - \mathbb{E}(Y | W,A=0)\bigr].
+$$
+
+We can think of this as computing the treatment effect in each covariate stratum given by $W$, and then taking a weighted average to combine all contributions. Next, we estimate the ATE by fitting the Outcome Regression $Q(W,A) = \mathbb{E}(Y|W,A)$ using a linear model and OLS, and then substituting this fit $\hat{Q}_n(W,A)$ into the above formula. This yields the estimator
+
+$$
+\hat{\psi}_n^{\text{OR}} = \frac{1}{n} \sum_{i=1}^n \Bigl[\hat{Q}_n(W_i,1) - \hat{Q}_n(W_i,0)\Bigr].
+$$
+
+In other words, for each data point $O_i$ with treatment $A_i = a$ we predict the expected outcome under treatment given their covariate value $W_i$, namely $\hat{Q}_n(W_i,1)$, as well as the expected outcome under control given their covariate value $W_i$, namely $\hat{Q}_n(W_i, 0)$. In the substitution estimator, these two predictions are contrasted and then averaged over all data points.
+
+```{r}
+# Explicitly evaluate the OR substitution estimator
+data <- sim1a(n_sample)
+
+# Obtain $\hat{Q}_n(W,A)$ by fitting Q_lin to data
+Qfit <- glm2(Q_lin, data = data)
+  
+# From the fitted model, predict 
+covariates <- colnames(data)[grepl("^W", colnames(data))]
+Qfit_0W <- predict(Qfit, newdata = data.frame(A = 0, data[covariates]))
+Qfit_1W <- predict(Qfit, newdata = data.frame(A = 1, data[covariates]))
+
+# Evaluate estimate
+mean(Qfit_1W - Qfit_0W)
+```
+
+To obtain a CI and p-value on this substitution estimator, we can use the bootstrap. However, this is relatively slow because it involves re-sampling the data R = 1000 times, each time fitting the substitution estimator. This functionality can be found in the function estimate_OLS_sub in "./scripts/estimators.R"
+
+```{r}
+# Define the OR substitution estimator as a function of data
+OLS_sub_lin <- function(data){ estimate_OLS_sub(data, alpha=0.05, true_value, Qform=Q_lin)}
+
+# Generate data k = 1 times, and tabulate the results (MC_est() from "./scripts/utils.R")
+MC_est(k=1, n=n_sample, simulation=sim1a, est_list=list(OLS_sub = OLS_sub_lin))
+```
+
+The above can again be repeated $k = 200$ times to plot the distribution of the central estimates. Again, this plot disregards the error bars, CI, and p-value computed for each individual run (here, via bootstrap).
+
+NOTE: This step is a little time consuming due to the bootstrap.
+
+```{r}
+# Repeat the above k = 200 times + save the resulting dataframe
+sim1_sub_200 <- MC_est(k=200, n=n_sample, simulation=sim1a, est_list=list(OLS_lin = OLS_lin))
+```
+
+```{r}
+# Inspect the table of 200 estimates
+head(sim1_sub_200)
+
+# Plot the histogram with hist_per_est() from "./scripts/utils.R" (xlimits is optional)
+# Note that this step disregards OLS's CI estimate and p-value
+sim1_sub_200 %>% hist_per_est(xlimits = c(0, 1.2))
+
+# Compute summary statistics with MC_res() from "./scripts/utils.R"
+sim1_sub_200 %>% MC_res()
+```
+
+### Compare a linear model vs a model with interaction terms (slide 31)
+
+We specify the alternative model $Y \sim A + W_1 + W_2 + AW_1 + AW_2$ and investigate both OR estimators. For the coefficient estimator, we again extract the coefficient in front of $A$ although other choices can be argued; this is the problem! In contrast, the OR substitution estimator is defined model-independently, so its definition does not depend on the model/algorithm chosen to fit the data.
+
+```{r}
+# Define the interaction model
+Q_int <- as.formula(paste("Y ~ W1:W2 +", "A*(", paste(covariates, collapse = " + "), ")"))
+Q_base <- "Y ~ A"
+
+# List the four OR estimators: Coefficient/substitution and linear/interaction
+est_OLS_vs <- list(
+  OLS = function(data){ estimate_OLS(data, Qform = Q_lin)},
+  OLS_int = function(data){ estimate_OLS(data, Qform = Q_int)},
+  OLS_sub = function(data){ estimate_OLS_sub(data, Qform = Q_lin)},
+  OLS_sub_int = function(data){ estimate_OLS_sub(data, Qform = Q_int)}
+)
+```
+
+Next, we fit all four models on $k= 200$ draws of the data. This is somewhat time consuming because there are two algorithms (the two substitution models) which combine CI and p-value via bootstrap.
+
+```{r}
+## Perform MC experiment
+# Smallest sample
+n_sample = 2000
+sim1_OLS_vs_2K <- MC_est(k = 200, n_sample, simulation = sim1a, est_OLS_vs)
+```
+
+Visualise and plot:
+
+```{r}
+# Histogram the central estimates, per estimator
+sim1_OLS_vs_2K %>% hist_per_est(xlimits = c(0,1.5))
+
+# Plot all four histograms together
+sim1_OLS_vs_2K %>% hist_all(xlimits = c(0,1.5))
+
+# Histogram the lower and upper 95% CI bounds, per estimator
+sim1_OLS_vs_2K %>% hist_per_est_CI(xlimits = c(0, 1.5))
+
+# Display summary statistics, such as bias, variance, and bias.to.se ratio
+sim1_OLS_vs_2K %>% MC_res()
+```
+
+Re-doing the above analysis for larger sample sizes (e.g., $n_{\text{sample}} = 20,\!000$ on slide 32) shows that for all four estimators coverage decreases to zero, and the bias.to.se ratio becomes large ($\gg 1$). This indicates that the bias is so large that it exceeds the estimation uncertainty as quantified by the standard error (se).
+
+## Building up the TMLE estimator from scratch
+
+In this section, we construct the TMLE estimator step-by-step. TMLE estimators can be given additional robustness properties. The function estimator_tmle() in the file "./scripts/estimators.R" has some of these.
+
+### Step 1: Fit nuisance functions $Q(W,A)$ and $g(W)$
+
+For the outcome model, we (correctly) specify the linear model with interaction term$$
+Y \sim A + W_1 + W_2 + AW_1 + AW_2 + W_1W_2.
+$$Thus, we expect the OR substitution estimator to perform well in the sense that generating $k$ data sets and applying the OR substitution estimator $k$ times should result in a histogram centered around the true value.
+
+For the propensity score $g(W) = P(A=1|W)$, we (incorrectly) specify a main-term logistic model $\operatorname{logit} g(W) \sim W_1 + W_2$. The Inverse Probability of Treatment Weighting (IPTW) will likely not perform well.
+
+```{r}
+# Generate data from sim1a()
+n_sample <- 2000
+data <- sim1b(n_sample)
+
+# Define the outcome model (Q) and propensity score model (g)
+covariates <- colnames(data)[grepl("^W", colnames(data))]
+Q_int2 <- as.formula("Y ~ A + W1 + W2 + A*W1 + A*W2 + W1*W2")
+g_lin <- as.formula("A ~ W1 + W2")
+
+# Outcome mechanism: Fit Q to the data
+# Record predicted values under treatment (A=1) and control (A=0) for all n_sample data points
+# Qform <- "Y ~ A + W1 + W2"
+Q_init <- glm(Q_int2, family = gaussian, data = data)
+data$Q0W <- predict(Q_init, newdata = data.frame(A = 0, data[covariates]))
+data$Q1W <- predict(Q_init, newdata = data.frame(A = 1, data[covariates]))
+data$Q <- predict(Q_init, type = "response")
+
+# Treatment mechanism: Fit g to the data
+# Record  predicted treatment probabilities g(W) = P(A=1|W) for all n_sample data points
+gform <- "A ~ W1+W2"  #g_lin
+g_init <- glm(gform, family = binomial, data = data)
+data$g1W <- predict(g_init, type = "response")
+```
+
+At this point, we can evaluate the OR substitution estimator. This gives our initial ATE estimate:
+
+```{r}
+# The initial ATE estimate (without guarantees or error bars)
+ATE_init <- mean(data$Q1W - data$Q0W)
+ATE_init
+```
+
+Note that this value is close to the true value of 1 since the outcome model is correctly specified. Selecting a misspecified model for Qform (e.g., a basic model $Y \sim A$ ) will lead to very different results. (Try!)
+
+### Step 2: Update the initial estimate via the TMLE step
+
+Our initial fit $\hat{Q}_n(W,A)$ can be updated using the TMLE step, via an additional linear regression:
+
+$$
+\hat{Q}_{n,\epsilon} = \hat{Q}_n(A,W) + \epsilon H(\hat{g}_n)(W,A),
+$$
+
+where the parameter $\epsilon$ is fitted using Maximum Likelihood Estimation (MLE). The expression multiplying $\epsilon$ is known as the *clever covariate*, which is specific to the target quantity of interest. For us, the quantity of interest is the ATE, and the clever covariate for ATE can be shown to equal
+
+$$
+H(\hat{g}_n)(W,A) = \frac{A}{\hat{g}_n(W)} - \frac{1-A}{1-\hat{g}_n(W)}.
+$$
+
+This explains the name *Targeted Maximum Likelihood Estimation* or *TMLE*.
+
+First, we compute the clever covariate:
+
+```{r}
+# We use the propensity score fit g_init obtained above
+data$H <- (data$A / data$g1W) - ((1 - data$A) / (1 - data$g1W))
+```
+
+Second, we perform a linear regression of outcome $Y$ on the clever covariate to obtain $\epsilon$ via MLE whilst including the initial fit $\hat{Q}_n(W,A)$ as offset:
+
+```{r}
+# Fit \epsilon via linear regression (MLE):
+TMLE_fit <- glm2(data$Y ~ -1 + H + offset(data$Q), family = gaussian, data = data)
+epsilon_fit <- coef(TMLE_fit)
+
+# Check how large epsilon is
+epsilon_fit
+```
+
+Third, we update our initial $Q$ fit by setting
+
+$$
+\hat{Q}^*_n(W,A) = \hat{Q}_n(W,A) + \hat{\epsilon}_n H(\hat{g}_n)(W,A).
+$$
+
+It is helpful to unpack this equation for treatment ($A=1$) and control ($A=0$) separately:
+
+\begin{align}
+\hat{Q}^*_n(W,1) &= \hat{Q}_n(W,1) + \frac{\hat{\epsilon}}{\hat{g}_n(W)} \\
+\hat{Q}^*_n(W,0) &= \hat{Q}_n(W,0) - \frac{\hat{\epsilon}}{1-\hat{g}_n(W)}
+\end{align}
+
+In particular, individual prediction by the initial fits are shifted in opposite directions for treatment and for control. The updating step corrects bias in the initial Q fit by leveraging the propensity score fit $\hat{g}_n(W)$. The worse the initial Q fit (e.g., try using $Y \sim A$), the larger the residual bias due to misspecification of the $Q$-model, the larger the correction due to the TMLE step.
+
+```{r}
+# Update initial fit via the TMLE step
+data$Q_star1 <- data$Q1W + epsilon_fit * (1 / data$g1W)
+data$Q_star0 <- data$Q0W - epsilon_fit * (1 / (1 - data$g1W))
+
+# Final TMLE estimate
+ATE_tmle <- mean(data$Q_star1 - data$Q_star0)
+ATE_tmle
+```
+
+It is well known that (i) fitting $\epsilon$ with a *weighted* regression, and (ii) scaling $Y$ to lie in the unit interval $[0,1]$ and then using *logistic regression* for the TMLE update step, yields better performance. These are some of the additional robustness properties mentioned above with which TML estimators can be equipped.
+
+```{r}
+# Scale outcome to [0,1]
+a <- min(data$Y)
+b <- max(data$Y)
+data$Y <- (data$Y - a) / (b - a)
+
+# Re-fit Q now that Y is re-scaled
+Qform <- "Y ~ A + W1 + W2"
+Q_init <- glm(Qform, family = gaussian, data = data)
+data$Q0W <- predict(Q_init, newdata = data.frame(A = 0, data[covariates]))
+data$Q1W <- predict(Q_init, newdata = data.frame(A = 1, data[covariates]))
+data$Q <- predict(Q_init, type = "response")
+```
+
+```{r}
+# Define weights, and weighted clever covariate
+data$weights <- ifelse(data$A, 1/data$g1W, 1/(1-data$g1W))
+data$H_w <- data$A - (1 - data$A)
+
+# Fit \epsilon_w via weighted, logistic regression
+wTMLE_fit <- glm2(data$Y ~ -1 + H_w + offset(logit(data$Q)),
+                  family = quasibinomial, data = data, weights = weights)
+epsilon_w <- coef(wTMLE_fit)
+epsilon_w
+
+# Update the initial Q-fits
+data$wQ_star1 <- expit(logit(data$Q1W) + epsilon_w)
+data$wQ_star0 <- expit(logit(data$Q0W) - epsilon_w)
+
+# Evaluate the weighted logistic TMLE
+ATE_wtmle <- mean(data$wQ_star1 - data$wQ_star0)*(b-a)
+ATE_wtmle
+```
+
+The final TMLE estimator is similar to the OR substitution estimator, but using the updated $Q$-fits:
+
+\begin{align}
+\hat{\psi}_n^{\text{tmle}} &= \frac{1}{n} \sum_{i=1}^n \Bigl[\hat{Q}^*_n(W_i,1) - \hat{Q}^*_n(W_i,0)\Bigr] \\
+&= \frac{1}{n} \sum_{i=1}^n \left[ \left\{\hat{Q}_n(W_i,1) +\frac{\hat{\epsilon}}{\hat{g}_n(W_i)}\right\} - \left\{\hat{Q}_n(W_i,0) - \frac{\hat{\epsilon}}{1-\hat{g}_n(W_i)}\right\}\right]
+\end{align}
+
+It is helpful to visualise the change induced by the TMLE step.
+
+```{r}
+# Another try
+vis_TMLE2 <- data %>%
+  dplyr::select(c(g1W,Q0W,Q1W,Q_star0,Q_star1,wQ_star0,wQ_star1)) %>% 
+  slice_sample(n = 20) %>% 
+  mutate(x_position = seq_len(n()))
+
+# Plot Q0W and Q1W vs wQ_star0 and wQ_star1
+ggplot(vis_TMLE2, aes(x = x_position)) +
+  geom_point(aes(y = Q0W), color = "grey") +
+  geom_point(aes(y = Q1W), color = "grey") +
+  geom_point(aes(y = wQ_star0), color = "blue") +
+  geom_point(aes(y = wQ_star1), color = "blue") +
+  scale_x_continuous(breaks = seq(0, 100, by = 10)) +
+  theme_minimal() +
+  labs(x = "Index", y = "Values")
+
+# Plot Q0W and Q1W vs Q_star0 and Q_star1 vs g1W
+ggplot(vis_TMLE2, aes(x = x_position)) +
+  #geom_point(aes(y = g1W), color = "black") +
+  #geom_point(aes(y = 1-g1W), color = "black") +
+  geom_point(aes(y = Q0W), color = "grey") +
+  geom_point(aes(y = Q1W), color = "grey") +
+  geom_point(aes(y = Q_star0), color = "red") +
+  geom_point(aes(y = Q_star1), color = "red") +
+  scale_x_continuous(breaks = seq(0, 100, by = 10)) +
+  theme_minimal() +
+  labs(x = "Index", y = "Values")
+
+# All together
+ggplot(vis_TMLE2, aes(x = x_position)) +
+  geom_point(aes(y = Q0W), color = "grey") +
+  geom_point(aes(y = Q1W), color = "grey") +
+  geom_point(aes(y = wQ_star0), color = "blue") +
+  geom_point(aes(y = wQ_star1), color = "blue") +
+  geom_point(aes(y = Q_star0), color = "red") +
+  geom_point(aes(y = Q_star1), color = "red") +
+  scale_x_continuous(breaks = seq(0, 100, by = 10)) +
+  theme_minimal() +
+  labs(x = "Index", y = "Values")
+
+```
+
+### Step 3: Estimate the variance, CI, and p-value
+
+TMLE theory shows that, provided the $\hat{Q}_n$ and $\hat{g}_n$ are fitted well enough (this can be quantified), then the TMLE estimator $\hat{\psi}_n^{\text{tmle}}$ is normally distributed for large enough sample size, namely
+
+$$
+\sqrt{n}\bigl(\hat{\psi}_n^{\text{tmle}} - \psi_s \bigr) = \frac{1}{\sqrt{n}}\sum_{i=1}^n D_{P_0}(O_i) + o_P(1) \rightsquigarrow \mathcal{N}\bigl(0,\text{Var}D_{P_0}\bigr).
+$$
+
+Here $D_{P_0}(O_i) = D(Q_0,g_0)(O_i)$ is the *influence function* (IF) of the statistical estimand $\psi_s$. One can think of this as a first order derivative. Each target parameter, such as the ATE, has its own IF (if it exists). The IF is a function of the data $O_i$, and depends on the $Q$ and $g$ fits. For ATE, the IF is
+
+$$
+D(Q,g)(O) = H(g)(W,A) \bigl\{Y - Q(W,A) \bigr\} + Q(W,1) - Q(W,0) - \psi_s.
+$$
+
+Here we recognise the clever covariate $H(g)(W,A) = \frac{A}{g(W)} - \frac{1-A}{1-g(W)}$.
+
+For many parameters of interested, e.g., ATE, ATT, survival time, optimal treatment rule, their influence functions have been computed, or can be computed using a standard toolbox.
+
+VIa the theoretical result above, the variance of the IF gives us access to the variance of the TMLE estimator.
+
+```{r}
+# Estimate the variance of the IF
+data$IF <- data$A * data$H * (data$Y - data$Q_star1) - (1-data$A) * data$H * (data$Y - data$Q_star0) + (data$Q_star1 - data$Q_star0) - ATE_init
+
+# Estimate the sample variance and standard error of the IF
+se <- sd(data$IF)
+se
+```
+
+Note that the standard deviation of the IF is *NOT* the standard error on the TMLE estimate. To obtain the standard error of the TMLE estimator, we first need to divide by the square root of the sample size.
+
+Via the asymptotic normal distribution, an asymptotic $95\%$ confidence interval of the TMLE estimator is $$
+\Bigl(\hat{\psi}_n^{\text{tmle}} \pm 1.96 \sqrt{\operatorname{Var}(IF)/n} \Bigr).
+$$
+
+```{r}
+# Confidence interval
+CI_lower <- ATE_tmle - 1.96*se / sqrt(n_sample)
+CI_upper <- ATE_tmle + 1.96*se / sqrt(n_sample)
+
+# Print CI
+data.frame(Est.initial = ATE_init, Estimate = ATE_tmle, CI_lower = CI_lower, CI_upper = CI_upper)
+```
+
+The CI contains the true value, as expected from theory. In fact, a 95% CI is expected to contain the true value 95% of the times (so not always!), and the actual performance is quantified by coverage estimates.
+
+# Simulation study 2 (slide 43)
+
+### Data structure $O = (W_1, W_2, A, Y)$
+
+For the second simulation (slide 43), we modify the data-generation process as follows:
+
+$$
+W = (W_1, W_2) \sim \mathcal{N}\left( \begin{pmatrix} 0 \\ 1 \end{pmatrix}, \begin{pmatrix} 1 & 0.5 \\ 0.5 & 1 \end{pmatrix} \right) \\
+A \sim \mathcal{B}(e(W)) \, \text{ where } e(W) = \frac{1}{1+e^{-0.5 + 1.5W_1W_2}} \\
+Y \sim \mathcal{N}\Bigl(1 + A - 0.5W_1 - 0.25 W_1W_2, 1\Bigr)
+$$
+
+Note that the true propensity score $e(W) \equiv P(A=1|W)$ is now a logistic regression with interaction term $W_1W_2$, and the outcome $Y$ is normally distributed with a mean that depends on the covariates $(W_1,W_2)$.
+
+```{r, Generate data}
+# Generate data using sim1b() function from "./scripts/dgp.R" + examine data
+n_sample <- 2000
+data_b <- sim1b(n = n_sample)
+
+# Extract data summary with skimr
+skim(data_b)
+
+# The true Average Treatment Effect (ATE) is equal to 1
+true_value <- 1
+```
+
+### Further robustifying TMLE on simulation 2
+
+There are three standard ways to robustify the TMLE estimation procedure:
+
+1.  Using two coefficients $(\epsilon_1,\epsilon_0)$ to fit the updating step for $Q(1,W)$ and $Q(0,W)$
+
+2.  Fitting these $(\epsilon_1, \epsilon_0)$ with a *weighted* regression for stability, and
+
+3.  Scaling outcome $Y$ to lie in the unit interval $[0,1]$, using *logistic regression* for the TMLE update step so that predicted outcome still lies in the unit interval $[0,1]$, and then re-scaling $Y$ back to its original units. This procedure ensures natural bounds on outcome $Y$ are respected during the TMLE step.
+
+Below, we see an example where a basic TMLE is used ignoring 1-3 above. This is followed by an implementation of TMLE that uses all three robustification steps, which has better performance.
+
+```{r}
+# Generate data
+data <- sim1b(n_sample)
+
+# Define the outcome model (Q) and propensity score model (g)
+covariates <- colnames(data)[grepl("^W", colnames(data))]
+Q_int2 <- as.formula("Y ~ A + W1 + W2 + A*W1 + A*W2 + W1*W2")
+g_lin <- as.formula("A ~ W1 + W2")
+
+# Outcome mechanism: Fit Q to the data
+# Record predicted values under treatment (A=1) and control (A=0) for all n_sample data points
+Qform <- "Y ~ A + W1 + W2"
+Q_init <- glm(Qform, family = gaussian, data = data)
+data$Q0W <- predict(Q_init, newdata = data.frame(A = 0, data[covariates]))
+data$Q1W <- predict(Q_init, newdata = data.frame(A = 1, data[covariates]))
+data$Q <- predict(Q_init, type = "response")
+
+# Treatment mechanism: Fit g to the data
+# Record  predicted treatment probabilities g(W) = P(A=1|W) for all n_sample data points
+gform <- "A ~ W1+W2"  #g_lin
+g_init <- glm(gform, family = binomial, data = data)
+data$g1W <- predict(g_init, type = "response")
+
+# The initial ATE estimate (without guarantees or error bars)
+ATE_init <- mean(data$Q1W - data$Q0W)
+ATE_init
+
+# We use the propensity score fit g_init obtained above
+data$H <- (data$A / data$g1W) - ((1 - data$A) / (1 - data$g1W))
+
+# Fit \epsilon via linear regression (MLE):
+TMLE_fit <- glm2(data$Y ~ -1 + H + offset(data$Q), family = gaussian, data = data)
+epsilon_fit <- coef(TMLE_fit)
+
+# Check how large epsilon is
+epsilon_fit
+
+# Update initial fit via the TMLE step
+data$Q_star1 <- data$Q1W + epsilon_fit * (1 / data$g1W)
+data$Q_star0 <- data$Q0W - epsilon_fit * (1 / (1 - data$g1W))
+
+# Final TMLE estimate
+ATE_tmle <- mean(data$Q_star1 - data$Q_star0)
+ATE_tmle
+
+# TMLE lower and upper 95% confidence intervals
+data$IF <- data$A * data$H * (data$Y - data$Q_star1) - (1-data$A) * data$H * (data$Y - data$Q_star0) + (data$Q_star1 - data$Q_star0) - ATE_tmle
+ATE.ci.lower <- ATE_tmle - 1.96*sqrt(var(data$IF) / n_sample)
+ATE.ci.upper <- ATE_tmle + 1.96*sqrt(var(data$IF) / n_sample)
+
+# Print
+ATE.ci.lower
+ATE.ci.upper
+```
+
+Compare with the constructed robustified TMLE function of PhD student Asantewaa Sarpong. This function, called estimate_TMLE(), can be found in "./scripts/estimators.R". Here we equip it with the correctly specified outcome regression Q_int2, and the incorrectly specified main-term logistic regression g_lin.
+
+```{r}
+# Generate + fit with TMLE (100 times)
+estimate_TMLE_AS <- function(data){ estimate_TMLE(data, Qform = Q_int2, gform = g_lin)}
+#res_AS <- MC_est(k = 100, n_sample = 1000, sim1b, est_list = list(TMLE = estimate_TMLE_AS))
+```
+
+```{r}
+# Produce results table
+res_AS %>% MC_res()
+
+# Plot histogram
+res_AS %>% hist_all(xlimits = c(0.5,1.5))
+```
+
+## Slides 44-45: Comparison of TMLE with OR substitution and IPTW
+
+Using the same Simulation study 2 as above, we correctly specify the outcome regression Q_int2 as
+
+$$
+Y \sim A + W_1 + W_2 + A W_1 + A W_2,
+$$
+
+and *incorrectly* specify the propensity score as main-terms logistic regression $\operatorname{logit} g(W) \sim W_1 + W_2$. We expect the OR substitution estimator to perform well, IPW poorly, and TMLE well.
+
+```{r}
+# Data
+data <-sim1b()
+
+# Define the outcome model (Q) and propensity score model (g)
+covariates <- colnames(data)[grepl("^W", colnames(data))]
+Q_int2 <- as.formula("Y ~ A + W1 + W2 + A*W1 + A*W2 + W1*W2")
+g_lin <- as.formula("A ~ W1 + W2")
+
+# Define the list of estimators: OR with Q_int2, IPTW with g_lin, TMLE with Q_in2 and g_lin
+ests_sim1b <- list(
+  OLS_Qint2 = function(data){ estimate_OLS(data, Qform = Q_int2)},
+  IPW_glin = function(data){ estimate_IPW(data, gform = g_lin)},
+  TMLE_Qint2_glin = function(data){ estimate_TMLE(data, Qform = Q_int2, gform = g_lin)}
+)
+```
+
+```{r}
+# Perform the estimation 200 times at sample sizes (i) n = 2000, and (ii) n = 20,000
+sim1b_2K <- MC_est(k = 200, n_sample = 2000, simulation = sim1b, ests_sim1b)
+sim1b_20K <- MC_est(k = 200, n_sample = 20000, simulation = sim1b, ests_sim1b)
+```
+
+Visualise and plot the results at sample size n = 2000. TMLE perform best across various metrics, i.e., nominal coverage of 95% (not overly conservative, not anti-conservative, but as expected), least average bias, smallest mean variance, and smallest bias.to.se ratio indicating an optimal bias-variance trade-off. This display good finite (smaller) sample performance.
+
+```{r}
+# Histogram the central estimates, per estimator
+sim1b_2K %>% hist_per_est(xlimits = c(0,1.5))
+
+# Plot all four histograms together
+sim1b_2K %>% hist_all(xlimits = c(0,1.5))
+
+# Histogram the lower and upper 95% CI bounds, per estimator
+sim1b_2K %>% hist_per_est_CI(xlimits = c(0, 1.5))
+
+# Display summary statistics, such as bias, variance, and bias.to.se ratio
+sim1b_2K %>% MC_res()
+```
+
+Visualise and plot the results at sample size n = 20,000. TMLE and correctly specified OR substitution estimator perform comparably, with OR substitution slightly better in various metrics at this sample size.
+
+```{r}
+# Histogram the central estimates, per estimator
+sim1b_20K %>% hist_per_est(xlimits = c(0,1.5))
+
+# Plot all four histograms together
+sim1b_20K %>% hist_all(xlimits = c(0,1.5))
+
+# Histogram the lower and upper 95% CI bounds, per estimator
+sim1b_20K %>% hist_per_est_CI(xlimits = c(0, 1.5))
+
+# Display summary statistics, such as bias, variance, and bias.to.se ratio
+sim1b_20K %>% MC_res()
+```
+
+## Slide 46: TMLE corrects initial misspecification in Q with correct g
+
+Using the same Simulation 2, we correctly specify the propensity score $\operatorname{logit} g(W) \sim W_1 \cdot W_2$ but incorrectly specify the outcome regression $Q(W,A)$ in three different ways. Despite the misspecification of Q, TMLE will still estimate the causal effect correctly. This illustrates its **double robust** property.
+
+We select the following three misspecified outcome models:
+
+\begin{align}
+Q_{\text{con}} \, &\colon Y \sim 1 \\
+Q_{\text{base}} \, &\colon Y \sim A \\
+Q_{\text{sin}} \, &\colon Y \sim A + \sin(A \cdot W_1).
+\end{align}
+
+The first model fits outcome $Y$ as a constant (ignoring any influence of treatment $A$), the second model only takes treatment $A$ into account but ignores confounders, whereas the third model posits that $Y$ depends on treatment $A$ linearly as well as via a sinusoidal term $\sin(A \cdot W_1)$. Needless to say, all three models are misspecified to some extent as they do not reflect how outcome is generate in Simulation 2.
+
+```{r}
+# Define three TMLE estimators with the above OR models, and correct g model
+Q_con <- as.formula("Y ~ 1")
+Q_base <- as.formula("Y ~ A")
+Q_sin <- as.formula("Y ~ A + sin(A*W1)")
+g_int2 <- as.formula("A ~ W1:W2")
+
+# Estimators
+ests_DR_tmle <- list(
+  TMLE_Qcon = function(data){ estimate_TMLE(data, Qform = Q_con, gform = g_int2)},
+  TMLE_Qbase = function(data){ estimate_TMLE(data, Qform = Q_base, gform = g_int2)},
+  TMLE_Qsin = function(data){ estimate_TMLE(data, Qform = Q_sin, gform = g_int2)}
+)
+```
+
+Perform the estimation:
+
+```{r}
+# Estimate k = 1 time at sample size n = 1000
+res_TMLE_DR_1K <- MC_est(k = 1, n_sample = 1000, simulation = sim1b, ests_DR_tmle)
+```
+
+Visualise and plot, showing that the TMLE estimator corrects the initial biased estimates due to the misspecified OR models via its TMLE update step with the correct specified propensity model:
+
+```{r}
+# Plot the initial estimate (in red) + the TMLE estimate with CI (in black)
+res_TMLE_DR_1K %>% MC_res()
+res_TMLE_DR_1K[1:3,] %>% plot_est_CI(xlimits = c(0,2)) + 
+  geom_point(aes(x = Algorithm, y = Initial.Est), color = "red", size = 3)
+
+#res_TMLE_DR_1K %>% plot_est_CI(xlimits = c(-1,5))
+```
+
+# Slides 47-48: Simulation study 3
+
+### Data structure $O = (W_1, W_2, W_3, W_4, W_5, W_6, W_7, W_8, A, Y)$
+
+For the third simulation (slides 47-48), we modify the data-generation process as follows:
+
+\begin{align}
+W_1, W_2, W_3 &\sim \mathcal{B}(0.5) \\
+W_4 \mid W_1 &\sim \mathcal{B}(0.2+0.5W_1) \\
+W_5 \mid W_1, W_2,W_3,W_4 &\sim \mathcal{B}(0.05+0.3W_1+0.1W_2+0.05W_3+0.4W_4) \\
+W_6 \mid W_5 &\sim \mathcal{B}(0.2+0.6W_5) \\
+W_7 \mid W_3 &\sim \mathcal{B}(0.5+0.2W_3) \\
+W_8 \mid W_2, W_6, W_7 &\sim \mathcal{B}(0.1+0.2W_2+0.3W_6+0.1W_7) \\
+\operatorname{logit} g(W) &\sim -0.05+0.1W_1+0.2W_2+0.2W_3-0.02W_4-0.6W_5-0.2W_6-0.1W_7 \\
+Y &\sim \mathcal{N}\bigl(10+A+W_1+W_2+W_4+2W_6+W_7, 1\bigr)
+\end{align} Note that the true propensity score $e(W) \equiv P(A=1|W)$ is a main-term logistic regression which depends on all covariates apart from $W_8$. The outcome $Y$ is normally distributed with a mean that depends linearly on the treatment as well as five of the eight covariates, namely $(W_1,W_2,W_4,W_6,W_7)$.
+
+```{r, Generate data}
+# Generate data using sim2() function from "./scripts/dgp.R" + examine data
+n_sample <- 2000
+data_b <- sim2(n = n_sample)
+
+# Extract data summary with skimr
+skim(data_b)
+
+# The true Average Treatment Effect (ATE) is equal to 1
+true_value <- 1
+```
+
+In this simulation, we show that TMLE with a correctly specified propensity score can be (i) more precise than IPW, and (ii) correct OLS' loss of power when using an overly large regression (i.e. too many terms). This is a cautionary tale that "adding all covariates and interactions just to be sure" in a standard multivariate regression approach can dilute signal; a targeted approach can recover this signal.
+
+```{r}
+# Extract the covariates variables
+data2 <- sim2()
+covariates <- colnames(data2)[grepl("^W", colnames(data2))]
+
+# Declare the regression and propensity score formulas
+Q_lin <- as.formula(paste("Y ~ A +", paste(covariates, collapse = " + ")))
+Q_int <- as.formula(paste("Y ~", "A*(", paste(covariates, collapse = " + "), ")"))
+g_lin <- as.formula(paste("A ~", paste(covariates, collapse = " + ")))
+```
+
+Note that $Q_{\text{lin}}$ is the linear model $Y \sim A + W_1 + W_2 + \ldots + W_7 + W_8$ containing all eight covariates, including the three covariates $W_3,W_5,W_8$ that do not appear in the true model. The interaction model $Q_{\text{int}}$ additionally contains all interaction terms between treatment $A$ and covariates $W_1, \ldots, W_8$
+
+$$
+Q_{\text{int}} \, \colon \, Y \sim A + (W_1 + \ldots + W_8) + (AW_1 + \ldots + AW_8).
+$$
+
+This models is more complex than necessary relative to the true outcome model. Finally, $g_{\text{lin}}$ is a standard main-term logistic regression which is (almost) correctly specified, as it contains the extra covariate $W_8$.
+
+Next, we select our estimators, which consist of
+
+-   OLS_Qtrue: OLS with the oracle (ground truth) model $Y \sim A+W_1+W_2+W_4+W_6+W_7$
+
+-   OLS_Qint: OLS with the (overly complex) model with interactions $Q_{\text{int}}$
+
+-   IPW_glin: IPW with the (almost correctly specified) main-terms logistic regression $g_{\text{lin}}$
+
+-   TMLE_Qint_glin: TMLE with the (overly complex) $Q_{\text{int}}$ model and (almost correct) $g_{\text{lin}}$ model.
+
+```{r}
+# Define estimators
+ests_OLS_tmle <- list(
+  OLS_Qtrue = function(data){ estimate_OLS(data, Qform = "Y~A+W1+W2+W4+W6+W7")},
+  OLS_Qint = function(data){ estimate_OLS(data, Qform = Q_int)},
+  IPW_glin = function(data){ estimate_IPW(data, gform = g_lin)},
+  TMLE_Qint_glin = function(data){ estimate_TMLE(data, Qform = Q_int, gform = g_lin)}
+)
+
+# Generate data once, apply all four estimators, and plot the estimates + 95% CI 
+MC_est(k = 1, 2000, sim2, ests_OLS_tmle) %>% plot_est_CI()
+```
+
+```{r}
+# Repeat the same 200 times, and generate summary statistics to assess overall performance
+res_OLS_TMLE_2K <- MC_est(k = 100, n_sample = 2000, simulation = sim2, ests_OLS_tmle)
+
+# Investigate performance
+res_OLS_TMLE_2K %>% MC_res()
+```
+
+We see that TMLE performs as well as the OLS with the oracle (true unknowable) regression model, in terms of bias, mean variance, sample variance, and coverage, with variance \~6 times smaller.
