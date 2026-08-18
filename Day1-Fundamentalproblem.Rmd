@@ -26,16 +26,26 @@ library(tidyverse)
 library(MASS)
 library(survey)
 library(boot)
+library(ggrepel)
 
 # Plotting and visualisation
 library(ggplot2)
 library(skimr)
 
-# Learning algorithms
+# Machine learning / ensemble methods
 library(glm2)
 library(glmnet)
+library(gam)
 library(randomForest)
 library(SuperLearner)
+library(lightgbm)
+library(ranger)
+library(earth)
+library(caret)
+
+# Targeted learning packages
+library(tmle)
+library(ctmle)
 ```
 
 # Simulation study 1 (slide 24)

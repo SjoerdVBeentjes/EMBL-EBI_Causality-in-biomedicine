@@ -1180,6 +1180,38 @@
       "Maintainer": "Gábor Csárdi <csardi.gabor@gmail.com>",
       "Repository": "CRAN"
     },
+    "ctmle": {
+      "Package": "ctmle",
+      "Version": "0.1.2",
+      "Source": "Repository",
+      "Type": "Package",
+      "Title": "Collaborative Targeted Maximum Likelihood Estimation",
+      "Date": "2019-12-08",
+      "Authors@R": "c(person(\"Cheng\", \"Ju\", email = \"jucheng1992@gmail.com\", role = c(\"aut\", \"cre\")),person(\"Susan\", \"Gruber\", role = c(\"aut\")),person(\"Richard\", \"Wyss\", role = c(\"ctb\")),person(\"Jenny\",\"Haggstrom\", role = c(\"ctb\")),person(\"Mark\", \"van der Laan\", role = c(\"aut\", \"ths\")))",
+      "Maintainer": "Cheng Ju <jucheng1992@gmail.com>",
+      "Description": "Implements the general template for collaborative targeted maximum likelihood estimation. It also provides several commonly used C-TMLE instantiation, like the vanilla/scalable variable-selection C-TMLE (Ju et al. (2017) <doi:10.1177/0962280217729845>) and the glmnet-C-TMLE algorithm (Ju et al. (2017) <arXiv:1706.10029>).",
+      "License": "GPL-2",
+      "Depends": [
+        "R (>= 2.14.0)",
+        "SuperLearner",
+        "tmle",
+        "glmnet",
+        "stats"
+      ],
+      "Imports": [],
+      "Suggests": [
+        "testthat",
+        "knitr",
+        "rmarkdown",
+        "dplyr"
+      ],
+      "LazyLoad": "yes",
+      "RoxygenNote": "6.0.1",
+      "VignetteBuilder": "knitr",
+      "NeedsCompilation": "no",
+      "Author": "Cheng Ju [aut, cre], Susan Gruber [aut], Richard Wyss [ctb], Jenny Haggstrom [ctb], Mark van der Laan [aut, ths]",
+      "Repository": "CRAN"
+    },
     "curl": {
       "Package": "curl",
       "Version": "7.0.0",
@@ -2125,9 +2157,9 @@
     },
     "gridExtra": {
       "Package": "gridExtra",
-      "Version": "2.3",
+      "Version": "2.3.1",
       "Source": "Repository",
-      "Authors@R": "c(person(\"Baptiste\", \"Auguie\", email = \"baptiste.auguie@gmail.com\", role = c(\"aut\", \"cre\")), person(\"Anton\", \"Antonov\", email = \"tonytonov@gmail.com\", role = c(\"ctb\")))",
+      "Authors@R": "c(person(\"Baptiste\", \"Auguie\", email = \"baptiste.auguie@vuw.ac.nz\", role = c(\"aut\", \"cre\")), person(\"Anton\", \"Antonov\", email = \"tonytonov@gmail.com\", role = c(\"ctb\")))",
       "License": "GPL (>= 2)",
       "Title": "Miscellaneous Functions for \"Grid\" Graphics",
       "Type": "Package",
@@ -2150,7 +2182,7 @@
       "RoxygenNote": "6.0.1",
       "NeedsCompilation": "no",
       "Author": "Baptiste Auguie [aut, cre], Anton Antonov [ctb]",
-      "Maintainer": "Baptiste Auguie <baptiste.auguie@gmail.com>",
+      "Maintainer": "Baptiste Auguie <baptiste.auguie@vuw.ac.nz>",
       "Repository": "CRAN"
     },
     "gtable": {
@@ -4508,7 +4540,7 @@
     },
     "timechange": {
       "Package": "timechange",
-      "Version": "0.3.0",
+      "Version": "0.4.0",
       "Source": "Repository",
       "Title": "Efficient Manipulation of Date-Times",
       "Authors@R": "c(person(\"Vitalie\", \"Spinu\", email = \"spinuvit@gmail.com\", role = c(\"aut\", \"cre\")), person(\"Google Inc.\", role = c(\"ctb\", \"cph\")))",
@@ -4525,7 +4557,7 @@
         "testthat (>= 0.7.1.99)",
         "knitr"
       ],
-      "SystemRequirements": "A system with zoneinfo data (e.g. /usr/share/zoneinfo) as well as a recent-enough C++11 compiler (such as g++-4.8 or later). On Windows the zoneinfo included with R is used.",
+      "SystemRequirements": "A system with zoneinfo data (e.g. /usr/share/zoneinfo). On Windows the zoneinfo included with R is used.",
       "BugReports": "https://github.com/vspinu/timechange/issues",
       "URL": "https://github.com/vspinu/timechange/",
       "RoxygenNote": "7.2.1",
@@ -4557,6 +4589,32 @@
       "NeedsCompilation": "no",
       "Author": "Yihui Xie [aut, cre, cph] (<https://orcid.org/0000-0003-0645-5666>), Posit Software, PBC [cph, fnd], Christophe Dervieux [ctb] (<https://orcid.org/0000-0003-4474-2498>), Devon Ryan [ctb] (<https://orcid.org/0000-0002-8549-0971>), Ethan Heinzen [ctb], Fernando Cagua [ctb]",
       "Maintainer": "Yihui Xie <xie@yihui.name>",
+      "Repository": "CRAN"
+    },
+    "tmle": {
+      "Package": "tmle",
+      "Version": "2.1.1",
+      "Source": "Repository",
+      "Date": "2025-08-30",
+      "Title": "Targeted Maximum Likelihood Estimation",
+      "Authors@R": "c(person(\"Susan\", \"Gruber\", role = c(\"aut\", \"cre\"),  email = \"sgruber@cal.berkeley.edu\"), person(\"Mark\", \"van der Laan\", role = \"aut\", email = \"laan@berkeley.edu\"), person(\"Chris\", \"Kennedy\", role = \"ctr\", email = \"ck37@berkeley.edu\"))",
+      "Author": "Susan Gruber [aut, cre], Mark van der Laan [aut], Chris Kennedy [ctr]",
+      "Maintainer": "Susan Gruber <sgruber@cal.berkeley.edu>",
+      "Copyright": "Copyright 2012. The Regents of the University of California (Regents). All Rights Reserved.",
+      "Depends": [
+        "glmnet",
+        "SuperLearner (>= 2.0)"
+      ],
+      "Suggests": [
+        "dbarts (>= 0.9-18)",
+        "gam (>= 1.15)",
+        "ROCR (>= 1.0-7)",
+        "WeightedROC"
+      ],
+      "Description": "Targeted maximum likelihood estimation of point treatment effects (Targeted Maximum Likelihood Learning, The International Journal of Biostatistics, 2(1), 2006.  This version automatically estimates the additive treatment effect among the treated (ATT) and among the controls (ATC).  The tmle() function calculates the adjusted marginal difference in mean outcome associated with a binary point treatment, for continuous or binary outcomes.  Relative risk and odds ratio estimates are also reported for binary outcomes. Missingness in the outcome is allowed, but not in treatment assignment or baseline covariate values.  The population mean is calculated when there is missingness, and no variation in the treatment assignment. The tmleMSM() function estimates the parameters of a marginal structural model for a binary point treatment effect. Effect estimation stratified by a binary mediating variable is also available. An ID argument can be used to identify repeated measures. Default settings call 'SuperLearner' to estimate the Q and g portions of the likelihood, unless values or a user-supplied regression function are passed in as arguments.",
+      "License": "BSD_3_clause + file LICENSE | GPL-2",
+      "URL": "https://CRAN.R-project.org/package=tmle",
+      "NeedsCompilation": "no",
       "Repository": "CRAN"
     },
     "tzdb": {
