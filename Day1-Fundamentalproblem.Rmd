@@ -54,11 +54,9 @@ library(ctmle)
 
 The data is generated from the following data-generation process:
 
-$$
-W = (W_1, W_2) \sim \mathcal{N}\left( \begin{pmatrix} 0 \\ 1 \end{pmatrix}, \begin{pmatrix} 1 & 0.5 \\ 0.5 & 1 \end{pmatrix} \right) \\
+$$W = (W_1, W_2) \sim \mathcal{N}\left( \begin{pmatrix} 0 \\ 1 \end{pmatrix}, \begin{pmatrix} 1 & 0.5 \\ 0.5 & 1 \end{pmatrix} \right) \\
 A \sim \mathcal{B}(g(W)) \, \text{ where } g(W) = \frac{1}{1+e^{-0.5 + 1.5W_1 - 0.5W_2}} \\
-Y \sim \mathcal{N}\Bigl(1 + A - 0.7W_1 + 0.3 e^{-W_1W_2}, 1\Bigr)
-$$
+Y \sim \mathcal{N}\Bigl(1 + A - 0.7W_1 + 0.3 e^{-W_1W_2}, 1\Bigr)$$
 
 Note that the true propensity score $e(W) \equiv P(A=1|W)$ is a main-terms logistic regression, and the outcome $Y$ is normally distributed with a mean that depends linearly on treatment $A$, but non-linearly on the covariates $(W_1,W_2)$.
 
@@ -122,15 +120,11 @@ Although coverage is reasonable $\approx 81.5\%$ at this sample size $n = 2000$,
 
 The Average Treatment Effect is defined model-independently via the equation
 
-$$
-\psi_s = \mathbb{E}_W \bigl[\mathbb{E}(Y | W,A=1) - \mathbb{E}(Y | W,A=0)\bigr].
-$$
+$$\psi_s = \mathbb{E}_W \bigl[\mathbb{E}(Y | W,A=1) - \mathbb{E}(Y | W,A=0)\bigr].$$
 
 We can think of this as computing the treatment effect in each covariate stratum given by $W$, and then taking a weighted average to combine all contributions. Next, we estimate the ATE by fitting the Outcome Regression $Q(W,A) = \mathbb{E}(Y|W,A)$ using a linear model and OLS, and then substituting this fit $\hat{Q}_n(W,A)$ into the above formula. This yields the estimator
 
-$$
-\hat{\psi}_n^{\text{OR}} = \frac{1}{n} \sum_{i=1}^n \Bigl[\hat{Q}_n(W_i,1) - \hat{Q}_n(W_i,0)\Bigr].
-$$
+$$\hat{\psi}_n^{\text{OR}} = \frac{1}{n} \sum_{i=1}^n \Bigl[\hat{Q}_n(W_i,1) - \hat{Q}_n(W_i,0)\Bigr].$$
 
 In other words, for each data point $O_i$ with treatment $A_i = a$ we predict the expected outcome under treatment given their covariate value $W_i$, namely $\hat{Q}_n(W_i,1)$, as well as the expected outcome under control given their covariate value $W_i$, namely $\hat{Q}_n(W_i, 0)$. In the substitution estimator, these two predictions are contrasted and then averaged over all data points.
 
@@ -232,9 +226,9 @@ In this section, we construct the TMLE estimator step-by-step. TMLE estimators c
 
 ### Step 1: Fit nuisance functions $Q(W,A)$ and $g(W)$
 
-For the outcome model, we (correctly) specify the linear model with interaction term$$
-Y \sim A + W_1 + W_2 + AW_1 + AW_2 + W_1W_2.
-$$Thus, we expect the OR substitution estimator to perform well in the sense that generating $k$ data sets and applying the OR substitution estimator $k$ times should result in a histogram centered around the true value.
+For the outcome model, we (correctly) specify the linear model with interaction term
+$$Y \sim A + W_1 + W_2 + AW_1 + AW_2 + W_1W_2.$$
+Thus, we expect the OR substitution estimator to perform well in the sense that generating $k$ data sets and applying the OR substitution estimator $k$ times should result in a histogram centered around the true value.
 
 For the propensity score $g(W) = P(A=1|W)$, we (incorrectly) specify a main-term logistic model $\operatorname{logit} g(W) \sim W_1 + W_2$. The Inverse Probability of Treatment Weighting (IPTW) will likely not perform well.
 
@@ -277,15 +271,11 @@ Note that this value is close to the true value of 1 since the outcome model is 
 
 Our initial fit $\hat{Q}_n(W,A)$ can be updated using the TMLE step, via an additional linear regression:
 
-$$
-\hat{Q}_{n,\epsilon} = \hat{Q}_n(A,W) + \epsilon H(\hat{g}_n)(W,A),
-$$
+$$\hat{Q}_{n,\epsilon} = \hat{Q}_n(A,W) + \epsilon H(\hat{g}_n)(W,A),$$
 
 where the parameter $\epsilon$ is fitted using Maximum Likelihood Estimation (MLE). The expression multiplying $\epsilon$ is known as the *clever covariate*, which is specific to the target quantity of interest. For us, the quantity of interest is the ATE, and the clever covariate for ATE can be shown to equal
 
-$$
-H(\hat{g}_n)(W,A) = \frac{A}{\hat{g}_n(W)} - \frac{1-A}{1-\hat{g}_n(W)}.
-$$
+$$H(\hat{g}_n)(W,A) = \frac{A}{\hat{g}_n(W)} - \frac{1-A}{1-\hat{g}_n(W)}.$$
 
 This explains the name *Targeted Maximum Likelihood Estimation* or *TMLE*.
 
@@ -309,9 +299,7 @@ epsilon_fit
 
 Third, we update our initial $Q$ fit by setting
 
-$$
-\hat{Q}^*_n(W,A) = \hat{Q}_n(W,A) + \hat{\epsilon}_n H(\hat{g}_n)(W,A).
-$$
+$$\hat{Q}^*_n(W,A) = \hat{Q}_n(W,A) + \hat{\epsilon}_n H(\hat{g}_n)(W,A).$$
 
 It is helpful to unpack this equation for treatment ($A=1$) and control ($A=0$) separately:
 
@@ -424,15 +412,11 @@ ggplot(vis_TMLE2, aes(x = x_position)) +
 
 TMLE theory shows that, provided the $\hat{Q}_n$ and $\hat{g}_n$ are fitted well enough (this can be quantified), then the TMLE estimator $\hat{\psi}_n^{\text{tmle}}$ is normally distributed for large enough sample size, namely
 
-$$
-\sqrt{n}\bigl(\hat{\psi}_n^{\text{tmle}} - \psi_s \bigr) = \frac{1}{\sqrt{n}}\sum_{i=1}^n D_{P_0}(O_i) + o_P(1) \rightsquigarrow \mathcal{N}\bigl(0,\text{Var}D_{P_0}\bigr).
-$$
+$$\sqrt{n}\bigl(\hat{\psi}_n^{\text{tmle}} - \psi_s \bigr) = \frac{1}{\sqrt{n}}\sum_{i=1}^n D_{P_0}(O_i) + o_P(1) \rightsquigarrow \mathcal{N}\bigl(0,\text{Var}D_{P_0}\bigr).$$
 
 Here $D_{P_0}(O_i) = D(Q_0,g_0)(O_i)$ is the *influence function* (IF) of the statistical estimand $\psi_s$. One can think of this as a first order derivative. Each target parameter, such as the ATE, has its own IF (if it exists). The IF is a function of the data $O_i$, and depends on the $Q$ and $g$ fits. For ATE, the IF is
 
-$$
-D(Q,g)(O) = H(g)(W,A) \bigl\{Y - Q(W,A) \bigr\} + Q(W,1) - Q(W,0) - \psi_s.
-$$
+$$D(Q,g)(O) = H(g)(W,A) \bigl\{Y - Q(W,A) \bigr\} + Q(W,1) - Q(W,0) - \psi_s.$$
 
 Here we recognise the clever covariate $H(g)(W,A) = \frac{A}{g(W)} - \frac{1-A}{1-g(W)}$.
 
@@ -451,9 +435,8 @@ se
 
 Note that the standard deviation of the IF is *NOT* the standard error on the TMLE estimate. To obtain the standard error of the TMLE estimator, we first need to divide by the square root of the sample size.
 
-Via the asymptotic normal distribution, an asymptotic $95\%$ confidence interval of the TMLE estimator is $$
-\Bigl(\hat{\psi}_n^{\text{tmle}} \pm 1.96 \sqrt{\operatorname{Var}(IF)/n} \Bigr).
-$$
+Via the asymptotic normal distribution, an asymptotic $95\%$ confidence interval of the TMLE estimator is
+$$\Bigl(\hat{\psi}_n^{\text{tmle}} \pm 1.96 \sqrt{\operatorname{Var}(IF)/n} \Bigr).$$
 
 ```{r}
 # Confidence interval
@@ -472,11 +455,9 @@ The CI contains the true value, as expected from theory. In fact, a 95% CI is ex
 
 For the second simulation (slide 43), we modify the data-generation process as follows:
 
-$$
-W = (W_1, W_2) \sim \mathcal{N}\left( \begin{pmatrix} 0 \\ 1 \end{pmatrix}, \begin{pmatrix} 1 & 0.5 \\ 0.5 & 1 \end{pmatrix} \right) \\
+$$W = (W_1, W_2) \sim \mathcal{N}\left( \begin{pmatrix} 0 \\ 1 \end{pmatrix}, \begin{pmatrix} 1 & 0.5 \\ 0.5 & 1 \end{pmatrix} \right) \\
 A \sim \mathcal{B}(e(W)) \, \text{ where } e(W) = \frac{1}{1+e^{-0.5 + 1.5W_1W_2}} \\
-Y \sim \mathcal{N}\Bigl(1 + A - 0.5W_1 - 0.25 W_1W_2, 1\Bigr)
-$$
+Y \sim \mathcal{N}\Bigl(1 + A - 0.5W_1 - 0.25 W_1W_2, 1\Bigr)$$
 
 Note that the true propensity score $e(W) \equiv P(A=1|W)$ is now a logistic regression with interaction term $W_1W_2$, and the outcome $Y$ is normally distributed with a mean that depends on the covariates $(W_1,W_2)$.
 
@@ -579,9 +560,7 @@ res_AS %>% hist_all(xlimits = c(0.5,1.5))
 
 Using the same Simulation study 2 as above, we correctly specify the outcome regression Q_int2 as
 
-$$
-Y \sim A + W_1 + W_2 + A W_1 + A W_2,
-$$
+$$Y \sim A + W_1 + W_2 + A W_1 + A W_2,$$
 
 and *incorrectly* specify the propensity score as main-terms logistic regression $\operatorname{logit} g(W) \sim W_1 + W_2$. We expect the OR substitution estimator to perform well, IPW poorly, and TMLE well.
 
@@ -731,21 +710,19 @@ g_lin <- as.formula(paste("A ~", paste(covariates, collapse = " + ")))
 
 Note that $Q_{\text{lin}}$ is the linear model $Y \sim A + W_1 + W_2 + \ldots + W_7 + W_8$ containing all eight covariates, including the three covariates $W_3,W_5,W_8$ that do not appear in the true model. The interaction model $Q_{\text{int}}$ additionally contains all interaction terms between treatment $A$ and covariates $W_1, \ldots, W_8$
 
-$$
-Q_{\text{int}} \, \colon \, Y \sim A + (W_1 + \ldots + W_8) + (AW_1 + \ldots + AW_8).
-$$
+$$Q_{\text{int}} \, \colon \, Y \sim A + (W_1 + \ldots + W_8) + (AW_1 + \ldots + AW_8).$$
 
 This models is more complex than necessary relative to the true outcome model. Finally, $g_{\text{lin}}$ is a standard main-term logistic regression which is (almost) correctly specified, as it contains the extra covariate $W_8$.
 
 Next, we select our estimators, which consist of
 
--   OLS_Qtrue: OLS with the oracle (ground truth) model $Y \sim A+W_1+W_2+W_4+W_6+W_7$
+- OLS_Qtrue: OLS with the oracle (ground truth) model $Y \sim A+W_1+W_2+W_4+W_6+W_7$
 
--   OLS_Qint: OLS with the (overly complex) model with interactions $Q_{\text{int}}$
+- OLS_Qint: OLS with the (overly complex) model with interactions $Q_{\text{int}}$
 
--   IPW_glin: IPW with the (almost correctly specified) main-terms logistic regression $g_{\text{lin}}$
+- IPW_glin: IPW with the (almost correctly specified) main-terms logistic regression $g_{\text{lin}}$
 
--   TMLE_Qint_glin: TMLE with the (overly complex) $Q_{\text{int}}$ model and (almost correct) $g_{\text{lin}}$ model.
+- TMLE_Qint_glin: TMLE with the (overly complex) $Q_{\text{int}}$ model and (almost correct) $g_{\text{lin}}$ model.
 
 ```{r}
 # Define estimators
