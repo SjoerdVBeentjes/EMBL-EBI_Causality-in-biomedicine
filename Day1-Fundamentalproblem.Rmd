@@ -77,7 +77,7 @@ We specify the linear model $Y \sim A + W_1 + W_2$, i.e., we make the assumption
 ```{r, Model specification}
 # Extract the covariates
 # For Q, define a baseline linear model Y ~ A + W1 + W2
-covariates <- colnames(data)[grepl("^W", colnames(data))]
+covariates <- colnames(data_a)[grepl("^W", colnames(data_a))]
 Q_lin <- as.formula(paste("Y ~ A +", paste(covariates, collapse = " + ")))
 
 # Check the formula is as expected
@@ -98,6 +98,9 @@ MC_est(k=1, n=n_sample, simulation=sim1a, est_list=list(OLS_lin = OLS_lin))
 ```
 
 ```{r}
+# Set seed for reproducibility
+set.seed(42)
+
 # Repeat the above k = 200 times + save the resulting dataframe
 sim1_200 <- MC_est(k=200, n=n_sample, simulation=sim1a, est_list=list(OLS_lin = OLS_lin))
 ```
@@ -114,7 +117,7 @@ sim1_200 %>% hist_per_est(xlimits = c(0, 1.2))
 sim1_200 %>% MC_res()
 ```
 
-Although coverage is reasonable $\approx 81.5\%$ at this sample size $n = 2000$, the histogram is clearly not centred at the true value of one. It is instructive to examine what happens to the coverage when sample size increases (e.g., set $n_{\text{sample}} = 20000$).
+Although coverage is reasonable $\approx 77.5\%$ at this sample size $n = 2000$, the histogram is clearly not centred at the true value of one. It is instructive to examine what happens to the coverage when sample size increases (e.g., set $n_{\text{sample}} = 20000$).
 
 ### Work model-independently: Use a substitution estimator (slides 25-30)
 
@@ -193,7 +196,7 @@ est_OLS_vs <- list(
 )
 ```
 
-Next, we fit all four models on $k= 200$ draws of the data. This is somewhat time consuming because there are two algorithms (the two substitution models) which combine CI and p-value via bootstrap.
+Next, we fit all four models on $k= 200$ draws of the data. This is (!!) time consuming (!!) because there are two algorithms (the two substitution models) which combine CI and p-value via bootstrap.
 
 ```{r}
 ## Perform MC experiment
@@ -480,7 +483,7 @@ There are three standard ways to robustify the TMLE estimation procedure:
 
 3.  Scaling outcome $Y$ to lie in the unit interval $[0,1]$, using *logistic regression* for the TMLE update step so that predicted outcome still lies in the unit interval $[0,1]$, and then re-scaling $Y$ back to its original units. This procedure ensures natural bounds on outcome $Y$ are respected during the TMLE step.
 
-Below, we see an example where a basic TMLE is used ignoring 1-3 above. This is followed by an implementation of TMLE that uses all three robustification steps, which has better performance.
+Below, we see an example where a basic TMLE is used **ignoring** 1-3 above. This is followed by an implementation of TMLE that uses all three robustification steps, which has better performance.
 
 ```{r}
 # Generate data
@@ -542,7 +545,7 @@ Compare with the constructed robustified TMLE function of PhD student Asantewaa 
 ```{r}
 # Generate + fit with TMLE (100 times)
 estimate_TMLE_AS <- function(data){ estimate_TMLE(data, Qform = Q_int2, gform = g_lin)}
-#res_AS <- MC_est(k = 100, n_sample = 1000, sim1b, est_list = list(TMLE = estimate_TMLE_AS))
+res_AS <- MC_est(k = 100, n_sample = 1000, sim1b, est_list = list(TMLE = estimate_TMLE_AS))
 ```
 
 ```{r}
@@ -552,6 +555,8 @@ res_AS %>% MC_res()
 # Plot histogram
 res_AS %>% hist_all(xlimits = c(0.5,1.5))
 ```
+
+We have \~95% coverage, as predicted by theory!
 
 ## Slides 44-45: Comparison of TMLE with OR substitution and IPTW
 
@@ -742,4 +747,4 @@ res_OLS_TMLE_2K <- MC_est(k = 100, n_sample = 2000, simulation = sim2, ests_OLS_
 res_OLS_TMLE_2K %>% MC_res()
 ```
 
-We see that TMLE performs as well as the OLS with the oracle (true unknowable) regression model, in terms of bias, mean variance, sample variance, and coverage, with variance \~6 times smaller.
+We see that TMLE performs as well as the OLS with the oracle (true unknowable) regression model, in terms of bias, mean variance, sample variance, and coverage.
