@@ -226,9 +226,7 @@ In this section, we construct the TMLE estimator step-by-step. TMLE estimators c
 
 ### Step 1: Fit nuisance functions $Q(W,A)$ and $g(W)$
 
-For the outcome model, we (correctly) specify the linear model with interaction term
-$$Y \sim A + W_1 + W_2 + AW_1 + AW_2 + W_1W_2.$$
-Thus, we expect the OR substitution estimator to perform well in the sense that generating $k$ data sets and applying the OR substitution estimator $k$ times should result in a histogram centered around the true value.
+For the outcome model, we (correctly) specify the linear model with interaction term $$Y \sim A + W_1 + W_2 + AW_1 + AW_2 + W_1W_2.$$ Thus, we expect the OR substitution estimator to perform well in the sense that generating $k$ data sets and applying the OR substitution estimator $k$ times should result in a histogram centered around the true value.
 
 For the propensity score $g(W) = P(A=1|W)$, we (incorrectly) specify a main-term logistic model $\operatorname{logit} g(W) \sim W_1 + W_2$. The Inverse Probability of Treatment Weighting (IPTW) will likely not perform well.
 
@@ -435,8 +433,7 @@ se
 
 Note that the standard deviation of the IF is *NOT* the standard error on the TMLE estimate. To obtain the standard error of the TMLE estimator, we first need to divide by the square root of the sample size.
 
-Via the asymptotic normal distribution, an asymptotic $95\%$ confidence interval of the TMLE estimator is
-$$\Bigl(\hat{\psi}_n^{\text{tmle}} \pm 1.96 \sqrt{\operatorname{Var}(IF)/n} \Bigr).$$
+Via the asymptotic normal distribution, an asymptotic $95\%$ confidence interval of the TMLE estimator is $$\Bigl(\hat{\psi}_n^{\text{tmle}} \pm 1.96 \sqrt{\operatorname{Var}(IF)/n} \Bigr).$$
 
 ```{r}
 # Confidence interval
