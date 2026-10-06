@@ -1,5 +1,5 @@
 ---
-title: 'EBI Causality in biomedicine: Day 1 - Fundamental Problem of Causal Inference'
+title: 'EBI Causality in biomedicine: Day 2 - Quantifying uncertainty in biomedicine'
 author: "Sjoerd Beentjes and Ava Khamseh"
 date: "2026-10-5"
 output: beamer_presentation
@@ -48,7 +48,7 @@ library(tmle)
 library(ctmle)
 ```
 
-# Simulation study 1 (slide 24)
+# Simulation study 1
 
 ### Data structure $O = (W_1, W_2, A, Y)$
 
@@ -84,7 +84,7 @@ Q_lin <- as.formula(paste("Y ~ A +", paste(covariates, collapse = " + ")))
 print(Q_lin)
 ```
 
-### Obtain the estimate by extracting the coefficient (slide 24)
+### Obtain the estimate by extracting the coefficient
 
 We fit the linear model to data using Ordinary Least Squares (OLS), extract the coefficient in front of $A$, together with its $95\%$ confidence interval (CI) and corresponding p-value. Crucially, these are computed by using the linear model assumption: If the linear model is misspecified, the CI and p-value are not reliable.
 
@@ -116,7 +116,7 @@ sim1_200 %>% MC_res()
 
 Although coverage is reasonable $\approx 81.5\%$ at this sample size $n = 2000$, the histogram is clearly not centred at the true value of one. It is instructive to examine what happens to the coverage when sample size increases (e.g., set $n_{\text{sample}} = 20000$).
 
-### Work model-independently: Use a substitution estimator (slides 25-30)
+### Work model-independently: Use a substitution estimator
 
 The Average Treatment Effect is defined model-independently via the equation
 
@@ -175,7 +175,7 @@ sim1_sub_200 %>% hist_per_est(xlimits = c(0, 1.2))
 sim1_sub_200 %>% MC_res()
 ```
 
-### Compare a linear model vs a model with interaction terms (slide 31)
+### Compare a linear model vs a model with interaction terms
 
 We specify the alternative model $Y \sim A + W_1 + W_2 + AW_1 + AW_2$ and investigate both OR estimators. For the coefficient estimator, we again extract the coefficient in front of $A$ although other choices can be argued; this is the problem! In contrast, the OR substitution estimator is defined model-independently, so its definition does not depend on the model/algorithm chosen to fit the data.
 
@@ -446,7 +446,7 @@ data.frame(Est.initial = ATE_init, Estimate = ATE_tmle, CI_lower = CI_lower, CI_
 
 The CI contains the true value, as expected from theory. In fact, a 95% CI is expected to contain the true value 95% of the times (so not always!), and the actual performance is quantified by coverage estimates.
 
-# Simulation study 2 (slide 43)
+# Simulation study 2
 
 ### Data structure $O = (W_1, W_2, A, Y)$
 
@@ -553,7 +553,7 @@ res_AS %>% MC_res()
 res_AS %>% hist_all(xlimits = c(0.5,1.5))
 ```
 
-## Slides 44-45: Comparison of TMLE with OR substitution and IPTW
+## Comparison of TMLE with OR substitution and IPTW
 
 Using the same Simulation study 2 as above, we correctly specify the outcome regression Q_int2 as
 
@@ -616,7 +616,7 @@ sim1b_20K %>% hist_per_est_CI(xlimits = c(0, 1.5))
 sim1b_20K %>% MC_res()
 ```
 
-## Slide 46: TMLE corrects initial misspecification in Q with correct g
+## TMLE corrects initial misspecification in Q with correct g
 
 Using the same Simulation 2, we correctly specify the propensity score $\operatorname{logit} g(W) \sim W_1 \cdot W_2$ but incorrectly specify the outcome regression $Q(W,A)$ in three different ways. Despite the misspecification of Q, TMLE will still estimate the causal effect correctly. This illustrates its **double robust** property.
 
@@ -663,13 +663,13 @@ res_TMLE_DR_1K[1:3,] %>% plot_est_CI(xlimits = c(0,2)) +
 #res_TMLE_DR_1K %>% plot_est_CI(xlimits = c(-1,5))
 ```
 
-# Slides 47-48: Simulation study 3
+# Simulation study 3
 
 ### Data structure $O = (W_1, W_2, W_3, W_4, W_5, W_6, W_7, W_8, A, Y)$
 
-For the third simulation (slides 47-48), we modify the data-generation process as follows:
+For the third simulation, we modify the data-generation process as follows:
 
-\begin{align}
+$$\begin{align}
 W_1, W_2, W_3 &\sim \mathcal{B}(0.5) \\
 W_4 \mid W_1 &\sim \mathcal{B}(0.2+0.5W_1) \\
 W_5 \mid W_1, W_2,W_3,W_4 &\sim \mathcal{B}(0.05+0.3W_1+0.1W_2+0.05W_3+0.4W_4) \\
@@ -678,7 +678,9 @@ W_7 \mid W_3 &\sim \mathcal{B}(0.5+0.2W_3) \\
 W_8 \mid W_2, W_6, W_7 &\sim \mathcal{B}(0.1+0.2W_2+0.3W_6+0.1W_7) \\
 \operatorname{logit} g(W) &\sim -0.05+0.1W_1+0.2W_2+0.2W_3-0.02W_4-0.6W_5-0.2W_6-0.1W_7 \\
 Y &\sim \mathcal{N}\bigl(10+A+W_1+W_2+W_4+2W_6+W_7, 1\bigr)
-\end{align} Note that the true propensity score $e(W) \equiv P(A=1|W)$ is a main-term logistic regression which depends on all covariates apart from $W_8$. The outcome $Y$ is normally distributed with a mean that depends linearly on the treatment as well as five of the eight covariates, namely $(W_1,W_2,W_4,W_6,W_7)$.
+\end{align} $$
+
+Note that the true propensity score $e(W) \equiv P(A=1|W)$ is a main-term logistic regression which depends on all covariates apart from $W_8$. The outcome $Y$ is normally distributed with a mean that depends linearly on the treatment as well as five of the eight covariates, namely $(W_1,W_2,W_4,W_6,W_7)$.
 
 ```{r, Generate data}
 # Generate data using sim2() function from "./scripts/dgp.R" + examine data
@@ -742,4 +744,4 @@ res_OLS_TMLE_2K <- MC_est(k = 100, n_sample = 2000, simulation = sim2, ests_OLS_
 res_OLS_TMLE_2K %>% MC_res()
 ```
 
-We see that TMLE performs as well as the OLS with the oracle (true unknowable) regression model, in terms of bias, mean variance, sample variance, and coverage, with variance \~6 times smaller.
+We see that TMLE performs as well as the OLS with the oracle (true unknowable) regression model, in terms of bias, mean variance, sample variance, and coverage.
