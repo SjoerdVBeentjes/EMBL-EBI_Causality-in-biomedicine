@@ -558,7 +558,6 @@ res_AS %>% hist_all(xlimits = c(0.5,1.5))
 
 We have \~95% coverage, as predicted by theory!
 
-
 ## Comparison of TMLE with OR substitution and IPTW
 
 Using the same Simulation study 2 as above, we correctly specify the outcome regression Q_int2 as

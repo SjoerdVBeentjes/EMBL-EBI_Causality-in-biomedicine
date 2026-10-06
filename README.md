@@ -1,6 +1,6 @@
 # EMBL-EBI: Causality in Biomedicine
 
-Materials for the Day 1 practical session 'Fundamental problem of causal inference' of the EMBO/EMBL-EBI practical course *"Causality in biomedicine: going beyond associations"* (4–9 October 2026, EMBL-EBI, Hinxton).
+Materials for the Day 2 practical session 'Quantifying uncertainty in simulations' of the EMBO/EMBL-EBI practical course *"Causality in biomedicine: going beyond associations"* (4–9 October 2026, EMBL-EBI, Hinxton).
 
 ## R Environment (renv) {#r-environment-renv}
 
